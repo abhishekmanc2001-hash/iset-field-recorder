@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>iSET Field Visit Recorder</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f4f6f3;--card:#fff;--tx:#1d2a22;--mut:#66756b;--pri:#1f7a4d;--pri-tx:#fff;--bd:#dde4de;--warn:#c77d12;--bad:#b3392f}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121915;--card:#1b2620;--tx:#e8efe9;--mut:#93a499;--pri:#3fb27a;--pri-tx:#08140d;--bd:#2c3a31;--warn:#e0a040;--bad:#e5645a}}
+:root[data-theme="dark"]{--bg:#121915;--card:#1b2620;--tx:#e8efe9;--mut:#93a499;--pri:#3fb27a;--pri-tx:#08140d;--bd:#2c3a31;--warn:#e0a040;--bad:#e5645a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#app{max-width:760px;margin:0 auto;padding:0 14px 90px}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 0;gap:8px}
+h1{font-size:19px;margin:0}h2{font-size:17px;margin:18px 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin:10px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:120px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 3px}
+input,select,textarea,button{font:inherit;color:var(--tx)}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg)}
+textarea{min-height:76px}
+button{border:0;border-radius:10px;padding:11px 16px;background:var(--pri);color:var(--pri-tx);font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+button.sm{padding:6px 10px;font-size:13px}
+.stat{text-align:center}.stat b{display:block;font-size:26px}.stat span{font-size:12px;color:var(--mut)}
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid var(--bd);margin-left:6px}
+.draft{color:var(--warn)}.pending{color:var(--bad)}.synced{color:var(--pri)}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--bd);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{background:none;color:var(--mut);border-radius:0;flex:1;max-width:130px;font-size:12px;padding:10px 2px}
+nav button.on{color:var(--pri)}
+.bar{display:flex;align-items:center;gap:8px;font-size:13px;padding:8px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--pri)}.off .dot{background:var(--bad)}
+.item{cursor:pointer}.item small{color:var(--mut)}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--bd);text-align:left}
+.scroll{overflow-x:auto}
+img.ph{max-width:100%;border-radius:10px;margin-top:8px}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:14px}.kv div:nth-child(odd){color:var(--mut)}
+</style></head><body><div id="app"></div>
+<script>
+const KEYS={local:'iset_local_v1',server:'iset_server_v1',sess:'iset_session_v1',sim:'iset_simoff_v1'};
+const USERS=[{u:'asha',p:'1234',name:'Asha Devi',role:'staff',emp:'ISET-101',phone:'—',zone:'Tumakuru'},
+{u:'ravi',p:'1234',name:'Ravi Naik',role:'staff',emp:'ISET-102',phone:'—',zone:'Chamarajanagar'},
+{u:'admin',p:'admin123',name:'Administrator',role:'admin',emp:'ISET-001',phone:'—',zone:'Head office'}];
+const ACTS=['Awareness meeting','Training / workshop','Household survey','Community mobilisation','SHG / group meeting','Health camp','School programme','Monitoring visit','Other'];
+const ld=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
+const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){alert('Storage full. Sync or remove photos.');return false}};
+let S={user:ld(KEYS.sess,null),view:'login',sel:null,edit:null,msg:''};
+const local=()=>ld(KEYS.local,[]), server=()=>ld(KEYS.server,[]);
+const online=()=>navigator.onLine!==false && !ld(KEYS.sim,false);
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today=()=>new Date().toISOString().slice(0,10);
+const uid=()=>'V'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+function go(v,x){S.view=v;if(x!==undefined)S.sel=x;render();window.scrollTo(0,0)}
+function login(){const u=USERS.find(x=>x.u===$('#lu').value.trim().toLowerCase()&&x.p===$('#lp').value);
+ if(!u){S.msg='Wrong username or password';return render()}
+ S.user=u;S.msg='';sv(KEYS.sess,u);go(u.role==='admin'?'adash':'dash')}
+function logout(){S.user=null;try{localStorage.removeItem(KEYS.sess)}catch(e){}go('login')}
+function sync(){if(!online()){S.msg='Offline — will sync when internet returns';return render()}
+ const L=local(),Sv=server();let n=0;
+ L.forEach(v=>{if(v.status==='pending'){v.status='synced';v.syncedAt=new Date().toISOString();const i=Sv.findIndex(x=>x.id===v.id);i>=0?Sv[i]=v:Sv.push(v);n++}});
+ sv(KEYS.local,L);sv(KEYS.server,Sv);S.msg=n?n+' visit(s) synced':'Nothing to sync';render()}
+function toggleSim(){sv(KEYS.sim,!ld(KEYS.sim,false));if(online())sync();else render()}
+addEventListener('online',()=>{if(S.user)sync()});addEventListener('offline',render);
+function save(asDraft){
+ const g=id=>$('#'+id).value.trim(),n=id=>Math.max(0,parseInt($('#'+id).value)||0);
+ const v=Object.assign(S.edit||{},{id:(S.edit&&S.edit.id)||uid(),staffUser:S.user.u,staff:S.user.name,date:g('f_date'),project:g('f_project'),activity:g('f_act'),village:g('f_vil'),taluk:g('f_tal'),district:g('f_dis'),male:n('f_m'),female:n('f_f'),children:n('f_c'),desc:g('f_desc'),findings:g('f_find'),followup:$('#f_fu').value,followDate:g('f_fud'),remarks:g('f_rem'),photo:S.photo||null,updated:new Date().toISOString()});
+ v.persons=v.male+v.female+v.children;
+ if(!asDraft){const miss=['date','project','village','taluk','district','desc'].filter(k=>!v[k]);
+  if(miss.length)return alert('Please fill: '+miss.join(', '));
+  if(v.followup==='Yes'&&!v.followDate)return alert('Enter follow-up date');
+  if(!v.persons)return alert('Enter number of persons reached')}
+ v.status=asDraft?'draft':'pending';
+ const L=local(),i=L.findIndex(x=>x.id===v.id);i>=0?L[i]=v:L.push(v);
+ if(!sv(KEYS.local,L))return;S.edit=null;S.photo=null;
+ S.msg=asDraft?'Draft saved on device':(online()?'Saved':'Saved offline — will sync later');
+ if(!asDraft&&online())return sync()||go('dash');go(asDraft?'drafts':'dash')}
+function pickPhoto(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();
+ r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,720/Math.max(im.width,im.height)),c=document.createElement('canvas');
+  c.width=im.width*k;c.height=im.height*k;c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+  S.photo=c.toDataURL('image/jpeg',.6);$('#pv').innerHTML='<img class="ph" src="'+S.photo+'">'};im.src=r.result};r.readAsDataURL(f)}
+function mine(){return local().filter(v=>v.staffUser===S.user.u)}
+function bar(){const o=online(),p=local().filter(v=>v.status==='pending').length;
+ return `<div class="bar ${o?'':'off'}"><span class="dot"></span><span>${o?'Online':'Offline'}${p?' · '+p+' waiting to sync':''}</span><span style="flex:1"></span>
+ ${p&&o?'<button class="sm" onclick="sync()">Sync now</button>':''}<button class="sm sec" onclick="toggleSim()">${ld(KEYS.sim,false)?'Go online':'Test offline'}</button></div>`}
+function head(t){return `<header><h1>${t}</h1><span style="font-size:13px;color:var(--mut)">${esc(S.user.name)}</span></header>${bar()}${S.msg?`<div class="card" onclick="S.msg='';render()">${esc(S.msg)}</div>`:''}`}
+function navb(){const a=S.user.role==='admin';
+ const t=a?[['adash','Dashboard'],['reports','Reports'],['all','All visits'],['profile','Profile']]:[['dash','Home'],['new','+ Visit'],['drafts','Drafts'],['hist','History'],['profile','Profile']];
+ return '<nav>'+t.map(x=>`<button class="${S.view===x[0]?'on':''}" onclick="${x[0]==='new'?'S.edit=null;S.photo=null;':''}go('${x[0]}')">${x[1]}</button>`).join('')+'</nav>'}
+function item(v){return `<div class="card item" onclick="go('detail','${v.id}')"><b>${esc(v.activity||'(no activity)')}</b><span class="pill ${v.status}">${v.status}</span><br><small>${esc(v.date)} · ${esc(v.village||'—')}, ${esc(v.taluk||'')} · ${v.persons||0} reached${v.staff&&S.user.role==='admin'?' · '+esc(v.staff):''}</small></div>`}
+function sum(a,k){return a.reduce((s,v)=>s+(+v[k]||0),0)}
+function group(a,k){const m={};a.forEach(v=>{const x=v[k]||'—';m[x]=m[x]||{n:0,p:0};m[x].n++;m[x].p+=v.persons||0});return m}
+function gtable(a,k,h){const m=group(a,k),e=Object.entries(m).sort((x,y)=>y[1].n-x[1].n);
+ return `<div class="scroll"><table><tr><th>${h}</th><th>Visits</th><th>Reached</th></tr>${e.map(([n,x])=>`<tr><td>${esc(n)}</td><td>${x.n}</td><td>${x.p}</td></tr>`).join('')||'<tr><td colspan=3>No data</td></tr>'}</table></div>`}
+const V={
+login:()=>`<header><h1>iSET Field Recorder</h1></header>${bar()}<div class="card"><label>Username</label><input id="lu" autocapitalize="off" value="asha"><label>Password</label><input id="lp" type="password" value="1234"><p style="color:var(--bad);font-size:13px">${esc(S.msg)}</p><button onclick="login()" style="width:100%">Log in</button>
+<p style="font-size:12px;color:var(--mut)">Demo accounts: asha / 1234 · ravi / 1234 · admin / admin123</p></div>`,
+dash(){const m=mine(),t=today(),wk=m.filter(v=>v.status!=='draft'&&v.date>=new Date(Date.now()-6*864e5).toISOString().slice(0,10));
+ return head('Hello, '+esc(S.user.name.split(' ')[0]))+`<div class="row"><div class="card stat"><b>${m.filter(v=>v.date===t&&v.status!=='draft').length}</b><span>Today</span></div><div class="card stat"><b>${wk.length}</b><span>Last 7 days</span></div><div class="card stat"><b>${sum(wk,'persons')}</b><span>People reached</span></div><div class="card stat"><b>${m.filter(v=>v.status==='draft').length}</b><span>Drafts</span></div></div>
+ <button style="width:100%" onclick="S.edit=null;S.photo=null;go('new')">+ New field visit</button>
+ <h2>Follow-ups due</h2>${m.filter(v=>v.followup==='Yes'&&v.status!=='draft'&&v.followDate<=new Date(Date.now()+7*864e5).toISOString().slice(0,10)).map(item).join('')||'<div class="card">None this week</div>'}
+ <h2>Recent</h2>${m.filter(v=>v.status!=='draft').sort((a,b)=>b.updated.localeCompare(a.updated)).slice(0,4).map(item).join('')||'<div class="card">No visits yet</div>'}`},
+new(){const e=S.edit||{},f=(id,l,v,t='text')=>`<label>${l}</label><input id="${id}" type="${t}" value="${esc(v??'')}">`;
+ if(S.photo===undefined||(e.photo&&!S.photo))S.photo=e.photo||null;
+ return head(S.edit?'Edit draft':'New field visit')+`<div class="card">
+ ${f('f_date','Date',e.date||today(),'date')}<label>Staff name</label><input value="${esc(S.user.name)}" disabled>
+ ${f('f_project','Project',e.project)}<label>Activity type</label><select id="f_act">${ACTS.map(a=>`<option ${a===e.activity?'selected':''}>${a}</option>`).join('')}</select>
+ ${f('f_vil','Village',e.village)}${f('f_tal','Taluk',e.taluk)}${f('f_dis','District',e.district)}
+ <div class="row">${f('f_m','Male',e.male??'','number')}${f('f_f','Female',e.female??'','number')}${f('f_c','Children',e.children??'','number')}</div>
+ <label>Activity description</label><textarea id="f_desc">${esc(e.desc)}</textarea>
+ <label>Key findings</label><textarea id="f_find">${esc(e.findings)}</textarea>
+ <label>Follow-up required</label><select id="f_fu"><option ${e.followup!=='Yes'?'selected':''}>No</option><option ${e.followup==='Yes'?'selected':''}>Yes</option></select>
+ ${f('f_fud','Follow-up date',e.followDate,'date')}
+ <label>Remarks</label><textarea id="f_rem">${esc(e.remarks)}</textarea>
+ <label>Photograph (optional)</label><input type="file" accept="image/*" capture="environment" onchange="pickPhoto(event)"><div id="pv">${S.photo?`<img class="ph" src="${S.photo}">`:''}</div>
+ <div class="row" style="margin-top:14px"><button class="sec" onclick="save(true)">Save draft</button><button onclick="save(false)">Submit</button></div></div>`},
+drafts:()=>head('Draft visits')+(mine().filter(v=>v.status==='draft').map(v=>`<div class="card"><b>${esc(v.activity)}</b> <small>${esc(v.date)} · ${esc(v.village||'—')}</small><div class="row" style="margin-top:8px"><button class="sm" onclick="S.edit=local().find(x=>x.id==='${v.id}');S.photo=undefined;go('new')">Continue</button><button class="sm sec" onclick="delV('${v.id}')">Delete</button></div></div>`).join('')||'<div class="card">No drafts</div>'),
+hist:()=>head('My visit history')+(mine().filter(v=>v.status!=='draft').sort((a,b)=>b.date.localeCompare(a.date)).map(item).join('')||'<div class="card">No submitted visits</div>'),
+all:()=>head('All synced visits')+(server().sort((a,b)=>b.date.localeCompare(a.date)).map(item).join('')||'<div class="card">No synced visits yet</div>'),
+detail(){const v=[...local(),...server()].find(x=>x.id===S.sel);if(!v)return head('Visit')+'<div class="card">Not found</div>';
+ const r=[['Date',v.date],['Staff',v.staff],['Project',v.project],['Activity',v.activity],['Village',v.village],['Taluk',v.taluk],['District',v.district],['Reached',`${v.persons} (M ${v.male} · F ${v.female} · Children ${v.children})`],['Description',v.desc],['Key findings',v.findings],['Follow-up',v.followup==='Yes'?'Yes — '+v.followDate:'No'],['Remarks',v.remarks],['Status',v.status]];
+ return head('Visit details')+`<div class="card kv">${r.map(x=>`<div>${x[0]}</div><div>${esc(x[1]||'—')}</div>`).join('')}</div>${v.photo?`<img class="ph" src="${v.photo}">`:''}<p><button class="sec" onclick="go(S.user.role==='admin'?'all':'hist')">← Back</button> ${v.status==='draft'?`<button onclick="S.edit=local().find(x=>x.id==='${v.id}');S.photo=undefined;go('new')">Edit</button>`:''}</p>`},
+profile:()=>head('Profile')+`<div class="card kv"><div>Name</div><div>${esc(S.user.name)}</div><div>Employee ID</div><div>${S.user.emp}</div><div>Role</div><div>${S.user.role}</div><div>Area</div><div>${S.user.zone}</div><div>Device visits</div><div>${S.user.role==='admin'?server().length:mine().length}</div></div><button class="sec" onclick="logout()" style="width:100%">Log out</button>`,
+adash(){const a=server(),t=today(),mo=today().slice(0,7);const m=a.filter(v=>v.date.startsWith(mo));
+ return head('Administrator dashboard')+`<div class="row"><div class="card stat"><b>${a.length}</b><span>Total visits</span></div><div class="card stat"><b>${m.length}</b><span>This month</span></div><div class="card stat"><b>${sum(a,'persons')}</b><span>People reached</span></div><div class="card stat"><b>${a.filter(v=>v.followup==='Yes').length}</b><span>Follow-ups</span></div></div>
+ <h2>Staff activity</h2><div class="card">${gtable(a,'staff','Staff')}</div><h2>Latest</h2>${a.sort((x,y)=>y.updated.localeCompare(x.updated)).slice(0,5).map(item).join('')||'<div class="card">No synced visits yet</div>'}`},
+reports(){const a=server();return head('Basic reports')+`<div class="card"><b>Gender split</b><p>Male ${sum(a,'male')} · Female ${sum(a,'female')} · Children ${sum(a,'children')}</p></div>
+ <h2>By activity</h2><div class="card">${gtable(a,'activity','Activity')}</div><h2>By district</h2><div class="card">${gtable(a,'district','District')}</div><h2>By project</h2><div class="card">${gtable(a,'project','Project')}</div>
+ <h2>Open follow-ups</h2><div class="card scroll"><table><tr><th>Due</th><th>Village</th><th>Staff</th></tr>${a.filter(v=>v.followup==='Yes').sort((x,y)=>x.followDate.localeCompare(y.followDate)).map(v=>`<tr onclick="go('detail','${v.id}')"><td>${v.followDate}</td><td>${esc(v.village)}</td><td>${esc(v.staff)}</td></tr>`).join('')||'<tr><td colspan=3>None</td></tr>'}</table></div>`}};
+function delV(id){if(confirm('Delete this draft?')){sv(KEYS.local,local().filter(v=>v.id!==id));render()}}
+function render(){if(!S.user&&S.view!=='login')S.view='login';
+ if(S.user&&S.view==='login')S.view=S.user.role==='admin'?'adash':'dash';
+ $('#app').innerHTML=V[S.view]()+(S.user?navb():'')}
+render();
+if('serviceWorker'in navigator){}
+</script></body></html>
